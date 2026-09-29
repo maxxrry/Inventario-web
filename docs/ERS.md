@@ -9,6 +9,7 @@ _26/09/2026 · Maxi_
 | Fecha | Revisión | Autor | Modificación |
 | :---- | :---- | :---- | :---- |
 | 26/09/2026 | 1.0 | Maxi | Versión inicial: introducción, descripción general y requisitos |
+| 29/09/2026 | 1.1 | Maxi | Productos opcionales en inventario: ventas con ítems libres (RF-15, RF-17, RF-18, RF-19, RF-20, RF-21) |
 
 ## 1. Introducción
 
@@ -27,10 +28,10 @@ Se compone de un frontend en React (capa de presentación) y un backend en Sprin
 **Lo que el sistema hará:**
 
 * Autenticar usuarios y controlar el acceso según rol (administrador y vendedor).
-* Registrar los productos que vende la tienda y sus categorías, para controlar su stock.
+* Registrar los productos que la tienda decide llevar en inventario y sus categorías, para controlar su stock. No es obligatorio registrar todos los productos.
 * Registrar entradas, salidas y ajustes de stock, con historial de movimientos.
 * Gestionar la cartera de clientes: quién compra, qué compra, cuánto gasta y cuándo fue su última compra.
-* Registrar ventas del local y de redes sociales, asociadas opcionalmente a uno o más clientes, descontando stock automáticamente.
+* Registrar ventas del local y de redes sociales, asociadas opcionalmente a uno o más clientes. Cada línea es un producto registrado (descuenta stock automáticamente) o un ítem libre ingresado a mano (no afecta stock).
 * Anular ventas, devolviendo el stock correspondiente.
 * Generar reportes de ventas y de clientes, y mostrar un dashboard con gráficos.
 
@@ -56,6 +57,8 @@ Se compone de un frontend en React (capa de presentación) y un backend en Sprin
 | Movimiento de stock | Registro de cualquier cambio en la cantidad de un producto: entrada, salida, ajuste, venta o anulación. |
 | Canal de venta | Medio por el que se concretó la venta: Local o Redes sociales. |
 | Stock | Cantidad de unidades disponibles de un producto. |
+| Producto registrado | Producto que la tienda decidió llevar en inventario: tiene SKU, precio de costo y stock controlado. |
+| Ítem libre | Línea de venta ingresada a mano, con descripción y precio, sin SKU ni costo. No afecta stock. |
 | Tienda | Negocio de ropa que encarga y usa el sistema (cliente del proyecto). |
 | Cliente | Persona que compra en la tienda, registrada con sus datos de contacto. |
 | Venta compartida | Venta con productos de más de un cliente que se paga o despacha en conjunto (ej: dos hermanas con envío a la misma dirección). Cada producto queda asignado al cliente que lo compró. |
@@ -91,7 +94,7 @@ flowchart LR
 | Autenticación y usuarios | Inicio y cierre de sesión, gestión de usuarios y roles. |
 | Productos | Registro de productos y categorías, búsqueda y filtros. |
 | Stock | Entradas, salidas y ajustes manuales; historial de movimientos. |
-| Ventas | Registro de ventas con canal, clientes (uno, varios o ninguno) y dirección de despacho; anulación con devolución de stock. |
+| Ventas | Registro de ventas con canal, clientes (uno, varios o ninguno), líneas de productos registrados o ítems libres y dirección de despacho; anulación con devolución de stock de los productos registrados. |
 | Clientes | Registro de clientes, ficha con historial de compras y total gastado, ranking de mejores clientes y clientes inactivos. |
 | Reportes y dashboard | Ventas por rango de fechas y canal, productos más vendidos, gráficos resumen. |
 
@@ -117,6 +120,7 @@ Lo usarán entre 2 y 3 personas: el desarrollador durante la etapa de proyecto y
 * La tienda cuenta con conexión a internet y un dispositivo con navegador moderno en el local.
 * Las ventas por redes sociales las ingresa manualmente un usuario del sistema.
 * Cada producto se vende como unidad sin variantes; si la tienda decide manejar tallas o colores, habrá que revisar el modelo de datos y varios requisitos.
+* La tienda decide qué productos lleva en inventario; el resto se vende como ítem libre, sin control de stock ni cálculo de ganancia.
 * Se asume un único local; múltiples sucursales quedan fuera de alcance.
 * El despliegue en un servidor o nube queda sujeto a lo que defina el ramo y la tienda.
 
@@ -201,31 +205,32 @@ Todo cambio de stock, incluidas ventas y anulaciones, genera un movimiento. Los 
 | :---- | :---- | :---- | :---- | :---- |
 | RF-15 | Registrar venta | Ambos | Ver detalle abajo. | Esencial |
 | RF-16 | Consultar historial de ventas | Ambos | Lista con número, fecha, canal, clientes, total, usuario y estado (Vigente / Anulada). Filtros por rango de fechas, canal, cliente y estado. | Esencial |
-| RF-17 | Ver detalle de venta | Ambos | Muestra los productos, cantidades, precios unitarios, el cliente de cada producto, el subtotal por cliente, el total y la dirección de despacho. | Esencial |
+| RF-17 | Ver detalle de venta | Ambos | Muestra cada línea (producto registrado o ítem libre) con cantidad, precio unitario y cliente, el subtotal por cliente, el total y la dirección de despacho. | Esencial |
 | RF-18 | Anular venta | Admin | Ver detalle abajo. | Esencial |
 
 **RF-15 · Registrar venta**
 
 1. El usuario selecciona el canal: Local o Redes sociales.
-2. Busca productos activos por nombre o SKU y agrega cada uno con su cantidad.
+2. Agrega líneas de dos tipos: un producto activo, buscándolo por nombre o SKU, con su cantidad; o un ítem libre, ingresando descripción, precio unitario y cantidad.
 3. Opcionalmente asocia uno o más clientes, buscándolos o creándolos en el momento sin salir de la venta.
 4. Si hay más de un cliente, indica a cuál corresponde cada producto; el sistema muestra el subtotal por cliente y el total de la venta.
 5. Opcionalmente ingresa una dirección de despacho, pudiendo usar la dirección registrada de uno de los clientes.
-6. Al confirmar, el sistema valida que haya stock suficiente para cada producto.
-7. Si todo es válido, guarda la venta con fecha, hora, usuario, canal, clientes y despacho, descuenta el stock y crea un movimiento de tipo Venta por cada producto, todo en una sola transacción.
+6. Al confirmar, el sistema valida que haya stock suficiente para cada producto registrado.
+7. Si todo es válido, guarda la venta con fecha, hora, usuario, canal, clientes y despacho, descuenta el stock y crea un movimiento de tipo Venta por cada producto registrado, todo en una sola transacción. Los ítems libres no generan movimientos.
 
 Validaciones y errores:
 
-* La venta debe tener al menos un producto; cantidades enteras mayores a 0.
+* La venta debe tener al menos una línea; cantidades enteras mayores a 0.
+* Un ítem libre exige descripción y precio unitario mayor a 0. No tiene SKU ni costo.
 * Si un producto no tiene stock suficiente, la venta no se guarda y se indica qué producto falla y cuánto stock hay.
 * Una venta sin clientes queda como venta anónima. Con un solo cliente, todos los productos se le asignan automáticamente. Con varios, cada producto debe quedar asignado a uno de ellos.
-* Cada línea guarda el precio de venta y el costo del producto en ese momento, para que un cambio de precio posterior no altere ventas ni reportes pasados.
+* Cada línea de producto registrado guarda el SKU, la descripción, el precio de venta y el costo del producto en ese momento, para que un cambio posterior no altere ventas ni reportes pasados. Un ítem libre guarda la descripción y el precio ingresados.
 
 **RF-18 · Anular venta**
 
 1. El administrador abre una venta vigente y elige Anular.
 2. Ingresa un motivo obligatorio y confirma.
-3. El sistema cambia el estado a Anulada (no la elimina), devuelve el stock de cada producto y crea un movimiento de tipo Anulación por cada uno.
+3. El sistema cambia el estado a Anulada (no la elimina), devuelve el stock de cada producto registrado y crea un movimiento de tipo Anulación por cada uno. Los ítems libres no generan movimientos.
 
 Una venta anulada no puede volver a anularse ni editarse, y se excluye de los reportes y de las estadísticas de clientes.
 
@@ -233,9 +238,9 @@ Una venta anulada no puede volver a anularse ni editarse, y se excluye de los re
 
 | ID | Requisito | Actor | Descripción | Prioridad |
 | :---- | :---- | :---- | :---- | :---- |
-| RF-19 | Reporte de ventas | Ambos | Por rango de fechas y canal (Local, Redes o ambos): número de ventas, unidades vendidas, total vendido, costo total y ganancia. Excluye ventas anuladas. | Esencial |
-| RF-20 | Productos más vendidos | Ambos | Ranking de productos por unidades vendidas en un rango de fechas. | Deseable |
-| RF-21 | Dashboard | Ambos | Pantalla de inicio con ventas del día y del mes, gráfico de ventas por día del mes actual, gráfico de ventas por canal y los 5 productos más vendidos. | Esencial |
+| RF-19 | Reporte de ventas | Ambos | Por rango de fechas y canal (Local, Redes o ambos): número de ventas, unidades vendidas, total vendido, total vendido en ítems libres, costo total y ganancia. El costo y la ganancia se calculan solo sobre las líneas de productos registrados. Excluye ventas anuladas. | Esencial |
+| RF-20 | Productos más vendidos | Ambos | Ranking de productos registrados por unidades vendidas en un rango de fechas. Los ítems libres no se incluyen. | Deseable |
+| RF-21 | Dashboard | Ambos | Pantalla de inicio con ventas del día y del mes, gráfico de ventas por día del mes actual, gráfico de ventas por canal y los 5 productos registrados más vendidos. | Esencial |
 
 #### 3.2.6. Clientes
 
